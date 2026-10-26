@@ -1,7 +1,10 @@
+import os
 import random
 import cv2
 import numpy as np
 import pygame
+
+folder = os.path.dirname(os.path.abspath(__file__))
 
 kamera = cv2.VideoCapture(0)
 ok, frame = kamera.read()
@@ -9,26 +12,41 @@ tinggi_asli, lebar_asli = frame.shape[:2]
 LEBAR = 800
 TINGGI = LEBAR * tinggi_asli // lebar_asli
 
-# biru HSV
-biru_bawah = np.array([86, 64, 113])
-biru_atas = np.array([118, 182, 189])
+# Nilai HSV
+BIRU_BAWAH = np.array([33, 49, 163])
+BIRU_ATAS = np.array([82, 106, 255])
 
+# Initiate pymgame display
 pygame.init()
 layar = pygame.display.set_mode((LEBAR, TINGGI))
 pygame.display.set_caption("Tangkap Buah")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("arial", 30)
 
-# warna buah: merah, kuning, hijau. bom hitam
-warna_buah = [(220, 40, 40), (250, 220, 50), (110, 170, 60)]
-warna_bom = (30, 30, 30)
+# gambar
+def muat(nama, ukuran, warna):
+    path = os.path.join(folder, nama)
+    if os.path.exists(path):
+        return pygame.transform.scale(pygame.image.load(path).convert_alpha(), ukuran)
+    print("File tidak ada:", nama)
+    gambar = pygame.Surface(ukuran, pygame.SRCALPHA)
+    pygame.draw.ellipse(gambar, warna, (0, 0, *ukuran))
+    return gambar
 
+# Cari image
+daftar_buah = [
+    muat("apple.png", (60, 60), (220, 40, 40)),
+    muat("banana.png", (70, 70), (250, 220, 50)),
+    muat("kiwi.png", (60, 70), (110, 170, 60)),
+]
+gambar_bom = muat("bomb.png", (70, 70), (40, 40, 40))
+
+KERANJANG_LEBAR = 150
+gambar_keranjang = muat("basket.png", (KERANJANG_LEBAR, 80), (150, 100, 50))
 keranjang_x = LEBAR // 2
-keranjang_lebar = 150
-keranjang_tinggi = 50
-keranjang_y = TINGGI - 70
+keranjang_y = TINGGI - 100
 
-items = []  
+items = []  # [x, y, gambar, bom?]
 skor = 0
 nyawa = 3
 timer = 0
@@ -51,9 +69,8 @@ while jalan:
     frame = cv2.flip(frame, 1)
     frame = cv2.resize(frame, (LEBAR, TINGGI))
 
-    # cari biru terbesar
     hsv = cv2.cvtColor(cv2.GaussianBlur(frame, (11, 11), 0), cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, biru_bawah, biru_atas)
+    mask = cv2.inRange(hsv, BIRU_BAWAH, BIRU_ATAS)
     kontur, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if kontur:
         terbesar = max(kontur, key=cv2.contourArea)
@@ -64,26 +81,26 @@ while jalan:
     if not game_over:
         timer += 1
         if timer > 40:
-            bom = random.random() < 0.2  # 20% bom
-            warna = warna_bom if bom else random.choice(warna_buah)
-            items.append([random.randint(20, LEBAR - 20), 0, warna, bom])
+            bom = random.random() < 0.2
+            gambar = gambar_bom if bom else random.choice(daftar_buah)
+            items.append([random.randint(30, LEBAR - 30), 0, gambar, bom])
             timer = 0
 
-        for it in items[:]:
-            it[1] += 5
+        for item in items[:]:
+            item[1] += 5
 
-            masuk = (keranjang_y <= it[1] <= keranjang_y + keranjang_tinggi
-                     and abs(it[0] - keranjang_x) <= keranjang_lebar // 2)
+            masuk = (keranjang_y <= item[1] <= keranjang_y + 40
+                     and abs(item[0] - keranjang_x) <= KERANJANG_LEBAR // 2)
 
             if masuk:
-                items.remove(it)
-                if it[3]:
+                items.remove(item)
+                if item[3]:
                     nyawa -= 1
                 else:
                     skor += 1
-            elif it[1] > TINGGI:
-                items.remove(it)
-                if not it[3]:  # bom lolos aman
+            elif item[1] > TINGGI:
+                items.remove(item)
+                if not item[3]:  # bom lolos aman
                     nyawa -= 1
 
         if nyawa <= 0:
@@ -93,11 +110,9 @@ while jalan:
     rgb = cv2.cvtColor(terang, cv2.COLOR_BGR2RGB)
     layar.blit(pygame.image.frombuffer(rgb.tobytes(), (LEBAR, TINGGI), "RGB"), (0, 0))
 
-    for x, y, warna, bom in items:
-        pygame.draw.circle(layar, warna, (x, y), 20)
-
-    pygame.draw.rect(layar, (150, 100, 50),
-                     (keranjang_x - keranjang_lebar // 2, keranjang_y, keranjang_lebar, keranjang_tinggi))
+    for x, y, gambar, _ in items:
+        layar.blit(gambar, (x - gambar.get_width() // 2, y - gambar.get_height() // 2))
+    layar.blit(gambar_keranjang, (keranjang_x - KERANJANG_LEBAR // 2, keranjang_y))
 
     layar.blit(font.render(f"Skor: {skor}   Nyawa: {nyawa}", True, (0, 0, 0)), (10, 10))
     if game_over:
