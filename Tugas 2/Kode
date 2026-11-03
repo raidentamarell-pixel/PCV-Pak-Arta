@@ -1,0 +1,132 @@
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Membaca gambar
+img = cv2.imread('gambar.jpg', cv2.IMREAD_GRAYSCALE)
+
+if img is None:
+    print("Gambar tidak ditemukan!")
+    exit()
+
+# 1. Transformasi Intensitas
+
+# Membuat gambar negatif
+negatif = 255 - img
+
+# Menambah kecerahan gambar
+brightness = np.zeros(img.shape, dtype=np.uint8)
+
+for y in range(img.shape[0]):
+    for x in range(img.shape[1]):
+        nilai = int(img[y, x]) + 50
+        if nilai > 255:
+            nilai = 255
+        brightness[y, x] = nilai
+
+# Mengatur kontras gambar
+contrast = np.zeros(img.shape, dtype=np.uint8)
+
+r_min = int(np.min(img))
+r_max = int(np.max(img))
+
+for y in range(img.shape[0]):
+    for x in range(img.shape[1]):
+        if r_max != r_min:
+            nilai = (int(img[y, x]) - r_min) * 255 / (r_max - r_min)
+        else:
+            nilai = int(img[y, x])
+        contrast[y, x] = int(nilai)
+
+
+# 2. Ekualisasi Histogram
+
+tinggi, lebar = img.shape
+jumlah_pixel = tinggi * lebar
+
+# Menghitung histogram
+histogram = [0] * 256
+
+for y in range(tinggi):
+    for x in range(lebar):
+        nilai = int(img[y, x])
+        histogram[nilai] += 1
+
+# Menghitung CDF
+cdf = [0] * 256
+cdf[0] = histogram[0]
+
+for i in range(1, 256):
+    cdf[i] = cdf[i - 1] + histogram[i]
+
+# Mencari nilai CDF terkecil
+cdf_min = 0
+
+for i in range(256):
+    if cdf[i] > 0:
+        cdf_min = cdf[i]
+        break
+
+# Membuat pemetaan intensitas baru
+L = 256
+mapping = [0] * 256
+
+for i in range(256):
+    mapping[i] = round(
+        ((cdf[i] - cdf_min) / (jumlah_pixel - cdf_min)) * (L - 1)
+    )
+
+# Menghasilkan gambar yang sudah diekualisasi
+equalized = np.zeros(img.shape, dtype=np.uint8)
+
+for y in range(tinggi):
+    for x in range(lebar):
+        nilai = int(img[y, x])
+        equalized[y, x] = mapping[nilai]
+
+
+# 3. Menampilkan hasil gambar
+
+images = [img, negatif, brightness, contrast, equalized]
+
+titles = [
+    'Original Image',
+    'Negative Image',
+    'Brightness',
+    'Contrast Stretching',
+    'Histogram Equalization'
+]
+
+plt.figure(figsize=(12, 8))
+
+for i in range(len(images)):
+    plt.subplot(2, 3, i + 1)
+    plt.imshow(images[i], cmap='gray', vmin=0, vmax=255)
+    plt.title(titles[i])
+    plt.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+
+# 4. Menampilkan histogram
+
+plt.figure(figsize=(12, 5))
+
+for i in range(len(images)):
+    plt.subplot(2, 3, i + 1)
+
+    hist = [0] * 256
+
+    for y in range(images[i].shape[0]):
+        for x in range(images[i].shape[1]):
+            nilai = int(images[i][y, x])
+            hist[nilai] += 1
+
+    plt.plot(hist)
+    plt.title(titles[i])
+    plt.xlim(0, 255)
+
+plt.tight_layout()
+plt.show()
